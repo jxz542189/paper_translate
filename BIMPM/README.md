@@ -67,7 +67,9 @@ $$\vec{m_i}=max_{j \in \mathcal(1,...,N)}f_m(\vec{h_i^p},\vec{h_j^1};W^3)$$
 $$\overleftarrow{m_i^{max}}\quad=max_{j \in \mathcal (1, ..., N)}f_m(\overleftarrow{h_i^p}\quad,\overleftarrow{h_j^q};W^4)$$
 
 (3)注意力匹配。图2（c）显示这种匹配策略。本文
-
+$$
+\overleftarrow{m_i^{max}}\quad=max_{j \in \mathcal (1, ..., N)}f_m(\overleftarrow{h_i^p}\quad,\overleftarrow{h_j^q};W^4)
+$$
 
 
 
