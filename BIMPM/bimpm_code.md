@@ -157,21 +157,34 @@ def match_passage_with_question(passage_reps, question_reps, passage_mask, quest
 
 开始进行全匹配：
 
-​        if with_full_match:
+```python
+        if with_full_match:
+
             if forward:
+
                 question_full_rep = layer_utils.collect_final_step_of_lstm(question_reps, question_lengths - 1)
+
             else:
+
                 question_full_rep = question_reps[:,0,:]
 
-​            passage_len = tf.shape(passage_reps)[1]
+            passage_len = tf.shape(passage_reps)[1]
+
             question_full_rep = tf.expand_dims(question_full_rep, axis=1)
+
             question_full_rep = tf.tile(question_full_rep, [1, passage_len, 1])  # [batch_size, pasasge_len, feature_dim]
 
-​            (attentive_rep, match_dim) = multi_perspective_match(context_lstm_dim,
+            (attentive_rep, match_dim) = multi_perspective_match(context_lstm_dim,
+
                                 passage_reps, question_full_rep, is_training=is_training, dropout_rate=options.dropout_rate,
+
                                 options=options, scope_name='mp-match-full-match')
+
             all_question_aware_representatins.append(attentive_rep)
+
             dim += match_dim
+
+```
 
 最大池化匹配：
 
