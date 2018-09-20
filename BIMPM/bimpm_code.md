@@ -126,4 +126,105 @@ def bilateral_match_func(in_question_repres,
     '''
 ```
 
-在双向匹配函数中
+在双向匹配函数包含段落和问题匹配函数：
+
+```python
+def match_passage_with_question(passage_reps, question_reps, passage_mask, question_mask, passage_lengths, question_lengths,
+                                context_lstm_dim, scope=None,
+                                with_full_match=True, with_maxpool_match=True, with_attentive_match=True, with_max_attentive_match=True,
+                                is_training=True, options=None, dropout_rate=0, forward=True):
+    '''
+    in_question_repres:[batch_size, question_len, dim]
+    in_passage_repres:[batch_size, passage_len, dim]
+    question_mask:[batch_size,question_len]
+    passage_mask:[batch_size,passage_len]
+    context_lstm_dim:lstm的隐藏层单元个数
+    with_full_match:全匹配
+    with_maxpool_match:最大池化匹配
+    with_attentive_match:注意力匹配
+    with_max_attentive_match:最大注意力匹配
+    '''
+    
+```
+
+段落和问题匹配函数中，最开始段落和问题进行余弦距离计算以及进行mask掩饰：
+
+```python
+    with tf.variable_scope(scope or "match_passage_with_question"):
+        relevancy_matrix = cal_relevancy_matrix(question_reps, passage_reps)
+        relevancy_matrix = mask_relevancy_matrix(relevancy_matrix, question_mask, passage_mask)
+```
+
+开始进行全匹配：
+
+​        if with_full_match:
+            if forward:
+                question_full_rep = layer_utils.collect_final_step_of_lstm(question_reps, question_lengths - 1)
+            else:
+                question_full_rep = question_reps[:,0,:]
+
+​            passage_len = tf.shape(passage_reps)[1]
+            question_full_rep = tf.expand_dims(question_full_rep, axis=1)
+            question_full_rep = tf.tile(question_full_rep, [1, passage_len, 1])  # [batch_size, pasasge_len, feature_dim]
+
+​            (attentive_rep, match_dim) = multi_perspective_match(context_lstm_dim,
+                                passage_reps, question_full_rep, is_training=is_training, dropout_rate=options.dropout_rate,
+                                options=options, scope_name='mp-match-full-match')
+            all_question_aware_representatins.append(attentive_rep)
+            dim += match_dim
+
+最大池化匹配：
+
+```python
+        if with_maxpool_match:
+            maxpooling_decomp_params = tf.get_variable("maxpooling_matching_decomp",
+                                                          shape=[options.cosine_MP_dim, context_lstm_dim], dtype=tf.float32)
+            maxpooling_rep = cal_maxpooling_matching(passage_reps, question_reps, maxpooling_decomp_params)
+            all_question_aware_representatins.append(maxpooling_rep)
+            dim += 2*options.cosine_MP_dim
+```
+
+注意力匹配：
+
+```python
+        if with_attentive_match:
+            atten_scores = layer_utils.calcuate_attention(passage_reps, question_reps, context_lstm_dim, context_lstm_dim,
+                    scope_name="attention", att_type=options.att_type, att_dim=options.att_dim,
+                    remove_diagnoal=False, mask1=passage_mask, mask2=question_mask, is_training=is_training, dropout_rate=dropout_rate)
+            att_question_contexts = tf.matmul(atten_scores, question_reps)
+            (attentive_rep, match_dim) = multi_perspective_match(context_lstm_dim,
+                    passage_reps, att_question_contexts, is_training=is_training, dropout_rate=options.dropout_rate,
+                    options=options, scope_name='mp-match-att_question')
+            all_question_aware_representatins.append(attentive_rep)
+            dim += match_dim
+```
+
+最大注意力匹配：
+
+```python
+        if with_max_attentive_match:
+            max_att = cal_max_question_representation(question_reps, relevancy_matrix)
+            (max_attentive_rep, match_dim) = multi_perspective_match(context_lstm_dim,
+                    passage_reps, max_att, is_training=is_training, dropout_rate=options.dropout_rate,
+                    options=options, scope_name='mp-match-max-att')
+            all_question_aware_representatins.append(max_attentive_rep)
+            dim += match_dim
+```
+
+最后就是预测层：
+
+```python
+        w_0 = tf.get_variable("w_0", [match_dim, match_dim/2], dtype=tf.float32)
+        b_0 = tf.get_variable("b_0", [match_dim/2], dtype=tf.float32)
+        w_1 = tf.get_variable("w_1", [match_dim/2, num_classes],dtype=tf.float32)
+        b_1 = tf.get_variable("b_1", [num_classes],dtype=tf.float32)
+
+        # if is_training: match_representation = tf.nn.dropout(match_representation, (1 - options.dropout_rate))
+        logits = tf.matmul(match_representation, w_0) + b_0
+        logits = tf.tanh(logits)
+        if is_training: logits = tf.nn.dropout(logits, (1 - options.dropout_rate))
+        logits = tf.matmul(logits, w_1) + b_1
+
+        self.prob = tf.nn.softmax(logits)
+```
+
